@@ -16,6 +16,14 @@ st.set_page_config(
 st.title("✉️ AI Email Writer")
 
 # =========================================================
+# CHECK API KEY
+# =========================================================
+
+if not st.secrets.get("GROQ_API_KEY"):
+    st.error("❌ GROQ API KEY not found in Streamlit Secrets")
+    st.stop()
+
+# =========================================================
 # GROQ CLIENT
 # =========================================================
 
@@ -63,7 +71,7 @@ with open(PURPOSE_FILE, "r") as file:
     purpose_list = json.load(file)
 
 # =========================================================
-# SESSION STATES
+# SESSION STATE
 # =========================================================
 
 if "suggested_points" not in st.session_state:
@@ -132,20 +140,22 @@ if st.button("Generate Important Points"):
     try:
 
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "user",
                     "content": suggestion_prompt
                 }
-            ]
+            ],
+            temperature=0.7,
+            max_tokens=300
         )
 
         raw_points = response.choices[0].message.content
 
-        # =========================================================
+        # =====================================================
         # CLEAN AI OUTPUT
-        # =========================================================
+        # =====================================================
 
         lines = raw_points.split("\n")
 
@@ -167,7 +177,7 @@ if st.button("Generate Important Points"):
 
     except Exception as e:
 
-        st.error(f"Error: {str(e)}")
+        st.error(f"❌ Error generating points: {str(e)}")
 
 # =========================================================
 # SELECT IMPORTANT POINTS
@@ -256,20 +266,22 @@ if st.button("Generate Email"):
             try:
 
                 response = client.chat.completions.create(
-                    model="llama3-8b-8192",
+                    model="llama-3.1-8b-instant",
                     messages=[
                         {
                             "role": "user",
                             "content": prompt
                         }
-                    ]
+                    ],
+                    temperature=0.7,
+                    max_tokens=700
                 )
 
                 email_content = response.choices[0].message.content
 
-                # =====================================================
+                # =================================================
                 # DISPLAY GENERATED EMAIL
-                # =====================================================
+                # =================================================
 
                 st.subheader("📧 Generated Email")
 
@@ -281,4 +293,4 @@ if st.button("Generate Email"):
 
             except Exception as e:
 
-                st.error(f"Error: {str(e)}")
+                st.error(f"❌ Error generating email: {str(e)}")
