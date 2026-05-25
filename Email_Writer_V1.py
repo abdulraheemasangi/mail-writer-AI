@@ -1,11 +1,12 @@
 import streamlit as st
-import requests
+from openai import OpenAI
 import json
 import os
 
 # =========================================================
 # PAGE CONFIG
 # =========================================================
+
 st.set_page_config(
     page_title="AI Email Writer",
     page_icon="✉️",
@@ -15,13 +16,24 @@ st.set_page_config(
 st.title("✉️ AI Email Writer")
 
 # =========================================================
+# GROQ CLIENT
+# =========================================================
+
+client = OpenAI(
+    api_key=st.secrets["GROQ_API_KEY"],
+    base_url="https://api.groq.com/openai/v1"
+)
+
+# =========================================================
 # FILE PATH
 # =========================================================
+
 PURPOSE_FILE = "purposes.json"
 
 # =========================================================
 # DEFAULT PURPOSES
 # =========================================================
+
 default_purposes = [
     "Leave Request",
     "Meeting Request",
@@ -37,6 +49,7 @@ default_purposes = [
 # =========================================================
 # CREATE PURPOSE FILE IF NOT EXISTS
 # =========================================================
+
 if not os.path.exists(PURPOSE_FILE):
 
     with open(PURPOSE_FILE, "w") as file:
@@ -45,18 +58,21 @@ if not os.path.exists(PURPOSE_FILE):
 # =========================================================
 # LOAD PURPOSES
 # =========================================================
+
 with open(PURPOSE_FILE, "r") as file:
     purpose_list = json.load(file)
 
 # =========================================================
 # SESSION STATES
 # =========================================================
+
 if "suggested_points" not in st.session_state:
     st.session_state.suggested_points = []
 
 # =========================================================
 # ADD NEW PURPOSE
 # =========================================================
+
 st.subheader("➕ Add New Email Purpose")
 
 new_purpose = st.text_input("Enter New Purpose")
@@ -87,6 +103,7 @@ if st.button("Add Purpose"):
 # =========================================================
 # PURPOSE DROPDOWN
 # =========================================================
+
 st.subheader("📌 Select Email Purpose")
 
 selected_purpose = st.selectbox(
@@ -97,6 +114,7 @@ selected_purpose = st.selectbox(
 # =========================================================
 # GENERATE IMPORTANT POINTS
 # =========================================================
+
 if st.button("Generate Important Points"):
 
     suggestion_prompt = f"""
@@ -113,57 +131,48 @@ if st.button("Generate Important Points"):
 
     try:
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": "llama3",
-                "prompt": suggestion_prompt,
-                "stream": False
-            }
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {
+                    "role": "user",
+                    "content": suggestion_prompt
+                }
+            ]
         )
 
-        result = response.json()
+        raw_points = response.choices[0].message.content
 
-        if "response" in result:
+        # =========================================================
+        # CLEAN AI OUTPUT
+        # =========================================================
 
-            raw_points = result["response"]
+        lines = raw_points.split("\n")
 
-            # =========================================================
-            # CLEAN AI OUTPUT
-            # =========================================================
-            lines = raw_points.split("\n")
+        cleaned_points = []
 
-            cleaned_points = []
+        for line in lines:
 
-            for line in lines:
+            line = line.strip()
 
-                line = line.strip()
+            if line != "":
 
-                if line != "":
+                line = line.replace("-", "")
+                line = line.replace("*", "")
+                line = line.replace("•", "")
 
-                    line = line.replace("-", "")
-                    line = line.replace("*", "")
-                    line = line.replace("•", "")
+                cleaned_points.append(line.strip())
 
-                    cleaned_points.append(line.strip())
-
-            st.session_state.suggested_points = cleaned_points
-
-        elif "error" in result:
-
-            st.error(result["error"])
-
-        else:
-
-            st.error("Unexpected response from AI")
+        st.session_state.suggested_points = cleaned_points
 
     except Exception as e:
 
-        st.error(str(e))
+        st.error(f"Error: {str(e)}")
 
 # =========================================================
 # SELECT IMPORTANT POINTS
 # =========================================================
+
 st.subheader("✅ Select Important Points")
 
 selected_points = st.multiselect(
@@ -174,6 +183,7 @@ selected_points = st.multiselect(
 # =========================================================
 # OTHER INPUTS
 # =========================================================
+
 tone = st.selectbox(
     "Select Tone",
     [
@@ -191,6 +201,7 @@ sender_name = st.text_input("Your Name")
 # =========================================================
 # DISPLAY SELECTED POINTS
 # =========================================================
+
 final_points = "\n".join(
     [f"- {point}" for point in selected_points]
 )
@@ -204,11 +215,13 @@ st.text_area(
 # =========================================================
 # GENERATE EMAIL
 # =========================================================
+
 if st.button("Generate Email"):
 
     # =====================================================
     # VALIDATION
     # =====================================================
+
     if len(selected_points) == 0:
 
         st.warning("Please select at least one important point")
@@ -242,39 +255,29 @@ if st.button("Generate Email"):
 
             try:
 
-                response = requests.post(
-                    "http://localhost:11434/api/generate",
-                    json={
-                        "model": "llama3",
-                        "prompt": prompt,
-                        "stream": False
-                    }
+                response = client.chat.completions.create(
+                    model="llama3-8b-8192",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
                 )
 
-                result = response.json()
+                email_content = response.choices[0].message.content
 
                 # =====================================================
                 # DISPLAY GENERATED EMAIL
                 # =====================================================
-                if "response" in result:
 
-                    email_content = result["response"]
+                st.subheader("📧 Generated Email")
 
-                    st.subheader("📧 Generated Email")
-
-                    st.text_area(
-                        "Generated Output",
-                        value=email_content,
-                        height=350
-                    )
-
-                elif "error" in result:
-
-                    st.error(f"Ollama Error: {result['error']}")
-
-                else:
-
-                    st.error("Unexpected response received from Ollama")
+                st.text_area(
+                    "Generated Output",
+                    value=email_content,
+                    height=350
+                )
 
             except Exception as e:
 
